@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <title>Kamera Studio SKBT</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .main-container { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+        .camera-box, .dashboard-box { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        canvas { border: 4px solid #333; border-radius: 10px; background: #000; width: 350px; height: 450px; }
+        .btn { padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; margin: 5px; }
+        .btn-blue { background: #0055ff; } .btn-white { background: #ffffff; color: #333; border: 1px solid #ccc; }
+        .btn-capture { background: #28a745; width: 100%; font-size: 1.1em; }
+        .status-tag { padding: 3px 8px; border-radius: 4px; font-size: 0.8em; }
+        .tag-done { background: #d4edda; color: #155724; }
+        .tag-pending { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<h1 style="text-align:center;">📸 Sistem Kamera Studio SKBT</h1>
+
+<div class="main-container">
+    <div class="camera-box">
+        <select id="pilihKelas" onchange="muatNama()" style="width:100%; padding:10px; margin-bottom:10px;">
+            <option value="">-- Pilih Kelas --</option>
+        </select>
+        <select id="pilihNama" style="width:100%; padding:10px; margin-bottom:15px;">
+            <option value="">-- Pilih Nama Murid --</option>
+        </select>
+
+        <video id="video" autoplay style="display:none;"></video>
+        <canvas id="canvas"></canvas>
+
+        <div style="margin: 15px 0;">
+            <button class="btn btn-blue" onclick="setBG('blue')">Latar Biru</button>
+            <button class="btn btn-white" onclick="setBG('white')">Latar Putih</button>
+        </div>
+        <button id="btnSnap" class="btn btn-capture" onclick="ambilGambar()">AMBIL & SIMPAN</button>
+    </div>
+
+    <div class="dashboard-box" style="width: 400px;">
+        <h3>📊 Dashboard Status</h3>
+        <div style="display:flex; justify-content: space-between; margin-bottom:15px;">
+            <div>Selesai: <b id="statSelesai" style="color:green">0</b></div>
+            <div>Belum: <b id="statBelum" style="color:red">0</b></div>
+        </div>
+        <div id="listDashboard" style="height: 400px; overflow-y: auto; border-top: 1px solid #eee; padding-top:10px;">
+            <p style="color:gray">Pilih kelas untuk lihat senarai...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    const scriptURL = https://script.google.com/macros/s/AKfycbx_hszR2a0ScxULD6lSpqpUqv1E8o5ucQid8DGJixIfBsWV8_5qUBn_aRX4Vm6akXrd/exec;
+    let dataSekolah = {};
+    let sudahSelesaiList = [];
+    let selectedBG = 'blue';
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // 1. Permulaan: Ambil Data & Kamera
+    window.onload = async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        
+        const res = await fetch(scriptURL);
+        dataSekolah = await res.json();
+        const selKelas = document.getElementById('pilihKelas');
+        Object.keys(dataSekolah).forEach(k => selKelas.add(new Option(k, k)));
+        
+        updateStats();
+    };
+
+    function setBG(c) { selectedBG = c; }
+
+    function muatNama() {
+        const kelas = document.getElementById('pilihKelas').value;
+        const selNama = document.getElementById('pilihNama');
+        selNama.innerHTML = '<option value="">-- Pilih Nama --</option>';
+        if(dataSekolah[kelas]) {
+            dataSekolah[kelas].forEach(n => selNama.add(new Option(n, n)));
+        }
+        renderDashboard();
+    }
+
+    async function updateStats() {
+        const res = await fetch(scriptURL + "?action=getStats");
+        sudahSelesaiList = await res.json();
+        renderDashboard();
+    }
+
+    function renderDashboard() {
+        const kelas = document.getElementById('pilihKelas').value;
+        const listDiv = document.getElementById('listDashboard');
+        if(!kelas) return;
+
+        let html = ""; let selesai = 0;
+        dataSekolah[kelas].forEach(nama => {
+            const isDone = sudahSelesaiList.includes(nama + "|" + kelas);
+            if(isDone) selesai++;
+            html += `<div style="margin-bottom:8px; display:flex; justify-content:space-between;">
+                        <span>${nama}</span>
+                        <span class="status-tag ${isDone?'tag-done':'tag-pending'}">${isDone?'Selesai':'Belum'}</span>
+                     </div>`;
+        });
+        document.getElementById('statSelesai').innerText = selesai;
+        document.getElementById('statBelum').innerText = dataSekolah[kelas].length - selesai;
+        listDiv.innerHTML = html;
+    }
+
+    // 2. Pemprosesan Imej (Green Screen)
+    function draw() {
+        canvas.width = 350; canvas.height = 450;
+        ctx.drawImage(video, -100, 0, 600, 450); // Adjusting webcam center
+        let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < frame.data.length; i += 4) {
+            let r = frame.data[i], g = frame.data[i+1], b = frame.data[i+2];
+            if (g > 100 && g > r * 1.2 && g > b * 1.2) { // Green screen logic
+                if(selectedBG === 'blue') { frame.data[i]=0; frame.data[i+1]=0; frame.data[i+2]=255; }
+                else { frame.data[i]=255; frame.data[i+1]=255; frame.data[i+2]=255; }
+            }
+        }
+        ctx.putImageData(frame, 0, 0);
+        requestAnimationFrame(draw);
+    }
+    video.addEventListener('play', draw);
+
+    // 3. Simpan Gambar
+    async function ambilGambar() {
+        const nama = document.getElementById('pilihNama').value;
+        const kelas = document.getElementById('pilihKelas').value;
+        if(!nama || !kelas) return alert("Pilih Nama & Kelas!");
+
+        document.getElementById('btnSnap').innerText = "PROSES MUAT NAIK...";
+        const imageData = canvas.toDataURL('image/jpeg');
+
+        await fetch(scriptURL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify({ image: imageData, filename: `${nama}_${kelas}.jpg`, nama: nama, kelas: kelas })
+        });
+
+        alert("Berjaya!");
+        document.getElementById('btnSnap').innerText = "AMBIL & SIMPAN";
+        updateStats();
+    }
+</script>
+</body>
+</html>
