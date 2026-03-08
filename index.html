@@ -2,14 +2,17 @@
 <html lang="ms">
 <head>
     <meta charset="UTF-8">
-    <title>Kamera Studio SKBT v6</title>
+    <title>Kamera Studio SKBT v7</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
         .main-container { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
         .camera-box, .dashboard-box { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        
+        /* Paparan Visual */
         canvas, #previewImg { border: 4px solid #333; border-radius: 10px; background: #000; width: 300px; height: 385px; display: block; margin: 0 auto; }
         #previewImg { background: #eee; object-fit: cover; display: none; }
         
+        /* Butang & Input */
         .btn { padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; margin: 3px; transition: 0.3s; font-size: 0.85em; }
         .btn:disabled { background: #ccc !important; cursor: not-allowed; }
         .btn-blue { background: #0055ff; } 
@@ -18,24 +21,23 @@
         .btn-open { background: #20c997; }
         .btn-close { background: #dc3545; }
         .btn-reset-cam { background: #f0ad4e; }
-        .btn-reset-status { background: #6c757d; padding: 4px 8px; font-size: 0.7em; }
+        .btn-reset-status { background: #6c757d; padding: 4px 10px; font-size: 0.75em; display: flex; align-items: center; gap: 5px; }
         
-        /* Dashboard Styling */
+        /* Dashboard */
         .status-item { 
-            margin-bottom: 10px; padding: 10px; border-radius: 8px; 
+            margin-bottom: 10px; padding: 12px; border-radius: 10px; 
             display: flex; justify-content: space-between; align-items: center;
-            border-left: 5px solid transparent; background: #f9f9f9;
+            border-left: 6px solid transparent; background: #f9f9f9; transition: 0.2s;
         }
         .item-done { border-left-color: #28a745; background: #e8f5e9; }
         .item-pending { border-left-color: #dc3545; background: #fdf2f2; }
-        
-        .status-tag { padding: 4px 10px; border-radius: 20px; font-size: 0.7em; font-weight: bold; }
+        .status-tag { padding: 4px 10px; border-radius: 20px; font-size: 0.7em; font-weight: bold; margin-top: 5px; display: inline-block; }
         .tag-done { background: #28a745; color: white; }
         .tag-pending { background: #dc3545; color: white; }
         
         .search-box { width: 94%; padding: 10px; margin-top: 5px; border: 2px solid #0055ff; border-radius: 8px; }
         select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd; }
-        .preview-label { text-align: center; font-weight: bold; color: #0055ff; margin-bottom: 5px; display: none; }
+        .preview-label { text-align: center; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; }
     </style>
 </head>
 <body>
@@ -51,27 +53,29 @@
         <select id="pilihNama">
             <option value="">-- Pilih Nama --</option>
         </select>
-        <input type="text" id="searchNama" class="search-box" oninput="tapisNama()" placeholder="🔍 Tapis nama...">
+        
+        <label>Carian Pantas:</label>
+        <input type="text" id="searchNama" class="search-box" oninput="tapisNama()" placeholder="🔍 Taip nama murid...">
 
         <video id="video" autoplay playsinline style="display:none;"></video>
         
         <div style="margin-top:15px;">
-            <div id="labelLive" class="preview-label" style="display:block; color: red;">🔴 LIVE</div>
+            <div id="labelLive" class="preview-label" style="display:block; color: red;">🔴 KAMERA AKTIF</div>
             <canvas id="canvas"></canvas>
             
-            <div id="labelPreview" class="preview-label">✅ PREVIEW GAMBAR TERAKHIR</div>
-            <img id="previewImg" alt="Preview">
+            <div id="labelPreview" class="preview-label" style="display:none; color: #0055ff;">✅ PREVIEW TERAKHIR</div>
+            <img id="previewImg" alt="Preview Gambar">
         </div>
 
         <div style="text-align:center; margin-top: 10px;">
             <button class="btn btn-open" onclick="bukaKamera()">📹 Buka</button>
-            <button class="btn btn-reset-cam" onclick="resetKamera()">🔄 Cam</button>
+            <button class="btn btn-reset-cam" onclick="resetKamera()">🔄 Reset Cam</button>
             <button class="btn btn-close" onclick="tutupKamera()">⏹️ Tutup</button>
         </div>
 
         <div style="margin: 10px 0; text-align:center;">
-            <button class="btn btn-blue" onclick="setBG('blue')">Biru</button>
-            <button class="btn btn-white" onclick="setBG('white')">Putih</button>
+            <button class="btn btn-blue" onclick="setBG('blue')">Latar Biru</button>
+            <button class="btn btn-white" onclick="setBG('white')">Latar Putih</button>
         </div>
         <button id="btnSnap" class="btn btn-capture" onclick="ambilGambar()">AMBIL & SIMPAN</button>
     </div>
@@ -80,21 +84,21 @@
         <h3>📊 Status Murid</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom:15px;">
             <div style="background:#e8f5e9; padding:10px; border-radius:10px; text-align:center;">
-                <small>SIAP</small><br><b id="statSelesai">0</b>
+                <small>SIAP</small><br><b id="statSelesai" style="font-size:1.4em; color:#1b5e20;">0</b>
             </div>
             <div style="background:#fdf2f2; padding:10px; border-radius:10px; text-align:center;">
-                <small>BELUM</small><br><b id="statBelum">0</b>
+                <small>BELUM</small><br><b id="statBelum" style="font-size:1.4em; color:#b71c1c;">0</b>
             </div>
         </div>
         
-        <div id="listDashboard" style="height: 520px; overflow-y: auto;">
-            <p style="color:gray; text-align:center;">Pilih kelas untuk mula...</p>
+        <div id="listDashboard" style="height: 550px; overflow-y: auto; padding-right:5px;">
+            <p style="color:gray; text-align:center;">Sila pilih kelas untuk melihat senarai...</p>
         </div>
     </div>
 </div>
 
 <script>
-    const scriptURL = 'https://script.google.com/macros/s/AKfycbyTMq0RHNvcJqQla3pUyIgCp5ffRPvEedb6HV9lmmFEgjvC_513_7vdZssFXN0qPul7/exec';
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbzwgDlFC8la87Gwq6eB9KHRc3pgBBmi2IH91lE7cO3-0d_iGlFeLSVDv-4El-G8kqB3/exec';
     let dataSekolah = {}, sudahSelesaiList = [], selectedBG = 'blue', currentStream = null, animationId = null;
     
     const video = document.getElementById('video');
@@ -103,11 +107,13 @@
     const previewImg = document.getElementById('previewImg');
 
     window.onload = async () => {
-        const res = await fetch(scriptURL);
-        dataSekolah = await res.json();
-        const selKelas = document.getElementById('pilihKelas');
-        Object.keys(dataSekolah).forEach(k => selKelas.add(new Option(k, k)));
-        updateStats();
+        try {
+            const res = await fetch(scriptURL);
+            dataSekolah = await res.json();
+            const selKelas = document.getElementById('pilihKelas');
+            Object.keys(dataSekolah).forEach(k => selKelas.add(new Option(k, k)));
+            updateStats();
+        } catch (e) { console.error("Data load failed"); }
     };
 
     async function bukaKamera() {
@@ -123,7 +129,7 @@
                 document.getElementById('labelPreview').style.display = "none";
                 draw(); 
             };
-        } catch (err) { alert("Akses kamera ditolak."); }
+        } catch (err) { alert("Sila benarkan akses kamera pada browser."); }
     }
 
     function tutupKamera() {
@@ -151,17 +157,21 @@
     function muatNama() { document.getElementById('searchNama').value = ""; tapisNama(); renderDashboard(); }
 
     async function updateStats() {
-        const res = await fetch(scriptURL + "?action=getStats");
-        sudahSelesaiList = await res.json();
-        renderDashboard();
+        try {
+            const res = await fetch(scriptURL + "?action=getStats");
+            sudahSelesaiList = await res.json();
+            renderDashboard();
+        } catch (e) { console.warn("Stats sync failed"); }
     }
 
-    // Fungsi baru untuk reset status individu
+    // Fungsi Reset Status - Menukar SIAP kepada BELUM semula
     async function resetStatus(nama, kelas) {
-        if(!confirm(`Adakah anda mahu membenarkan ${nama} ambil gambar semula?`)) return;
+        if(!confirm(`Beri peluang ${nama} untuk ambil gambar semula?`)) return;
         try {
-            await fetch(scriptURL + `?action=resetStatus&nama=${encodeURIComponent(nama)}&kelas=${encodeURIComponent(kelas)}`);
-            updateStats();
+            // Hantar arahan reset ke Apps Script
+            await fetch(`${scriptURL}?action=resetStatus&nama=${encodeURIComponent(nama)}&kelas=${encodeURIComponent(kelas)}`);
+            // Tarik data baharu untuk kemaskini dashboard secara automatik
+            await updateStats();
         } catch (e) { alert("Gagal mengemaskini status."); }
     }
 
@@ -175,7 +185,7 @@
             if(isDone) selesai++;
             html += `<div class="status-item ${isDone?'item-done':'item-pending'}">
                         <div>
-                            <div style="font-weight:500; font-size:0.85em;">${nama}</div>
+                            <div style="font-weight:bold; font-size:0.85em; color:#333;">${nama}</div>
                             <span class="status-tag ${isDone?'tag-done':'tag-pending'}">${isDone?'SIAP':'BELUM'}</span>
                         </div>
                         ${isDone ? `<button class="btn btn-reset-status" onclick="resetStatus('${nama}','${kelas}')">🔄 Reset</button>` : ''}
@@ -206,13 +216,13 @@
         const nama = document.getElementById('pilihNama').value;
         const kelas = document.getElementById('pilihKelas').value;
         const btn = document.getElementById('btnSnap');
-        if(!nama || !kelas) return alert("Pilih murid dahulu!");
+        if(!nama || !kelas) return alert("Sila pilih Nama & Kelas dahulu!");
         
-        btn.innerText = "SEDANG MENYIMPAN...";
+        btn.innerText = "MENYIMPAN...";
         btn.disabled = true;
         const imageData = canvas.toDataURL('image/jpeg', 0.9);
         
-        // Tunjuk Preview
+        // Tunjukkan PREVIEW dan sembunyikan LIVE kamera
         previewImg.src = imageData;
         previewImg.style.display = "block";
         document.getElementById('labelPreview').style.display = "block";
@@ -225,8 +235,8 @@
                 mode: 'no-cors',
                 body: JSON.stringify({ image: imageData, filename: `${nama}_${kelas}.jpg`, nama: nama, kelas: kelas })
             });
-            updateStats();
-        } catch (e) { alert("Gagal muat naik."); } 
+            await updateStats();
+        } catch (e) { alert("Ralat muat naik."); } 
         finally {
             btn.innerText = "AMBIL & SIMPAN";
             btn.disabled = false;
