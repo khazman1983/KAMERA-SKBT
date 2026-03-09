@@ -2,7 +2,9 @@
 <html lang="ms">
 <head>
     <meta charset="UTF-8">
-    <title>Kamera Studio SKBT v8 - Zoom Ready</title>
+    <title>Kamera AI SKBT v9 - No Green Screen</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
         .main-container { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
@@ -14,22 +16,26 @@
         .btn-white { background: #ffffff; color: #333; border: 1px solid #ccc; }
         .btn-capture { background: #28a745; width: 100%; font-size: 1.1em; margin-top: 15px; }
         .btn-open { background: #20c997; }
-        .btn-close { background: #dc3545; }
-        .btn-zoom { background: #6f42c1; } /* Warna ungu untuk Zoom */
+        .btn-zoom { background: #6f42c1; }
         .status-item { margin-bottom: 10px; padding: 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid transparent; background: #f9f9f9; }
         .item-done { border-left-color: #28a745; background: #e8f5e9; }
         .item-pending { border-left-color: #dc3545; background: #fdf2f2; }
-        .status-tag { padding: 4px 10px; border-radius: 20px; font-size: 0.7em; font-weight: bold; margin-top: 5px; display: inline-block; color: white; }
+        .status-tag { padding: 4px 10px; border-radius: 20px; font-size: 0.7em; font-weight: bold; color: white; }
         .tag-done { background: #28a745; }
         .tag-pending { background: #dc3545; }
         .search-box { width: 94%; padding: 10px; margin-top: 5px; border: 2px solid #0055ff; border-radius: 8px; }
         select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd; }
-        .preview-label { text-align: center; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; }
+        #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; display: none; }
     </style>
 </head>
 <body>
 
-<h1 style="text-align:center;">📸 Sistem Kamera Studio SKBT</h1>
+<div id="loadingOverlay">
+    <h2>🤖 Menyiapkan AI...</h2>
+    <p>Sila tunggu sebentar sementara model dimuatkan.</p>
+</div>
+
+<h1 style="text-align:center;">📸 Sistem Kamera AI SKBT (Tanpa Kain Hijau)</h1>
 
 <div class="main-container">
     <div class="camera-box" style="width: 350px;">
@@ -45,55 +51,35 @@
         <video id="video" autoplay playsinline style="display:none;"></video>
         
         <div style="margin-top:15px;">
-            <div id="labelLive" class="preview-label" style="display:block; color: red;">🔴 LIVE</div>
+            <div id="labelLive" style="text-align:center; font-weight:bold; color:red;">🔴 AI PROCESSING</div>
             <canvas id="canvas"></canvas>
-            <div id="labelPreview" class="preview-label" style="display:none; color: #0055ff;">✅ PREVIEW TERAKHIR</div>
+            <div id="labelPreview" style="text-align:center; font-weight:bold; color:#0055ff; display:none;">✅ PREVIEW TERAKHIR</div>
             <img id="previewImg">
         </div>
 
         <div style="text-align:center; margin-top: 10px;">
-            <button class="btn btn-open" onclick="bukaKamera()">📹 Buka</button>
-            <button class="btn btn-close" onclick="tutupKamera()">⏹️ Tutup</button>
-            <div style="margin-top:5px;">
-                <button class="btn btn-zoom" onclick="zoomIn()">➕ Zoom In</button>
-                <button class="btn btn-zoom" onclick="zoomOut()">➖ Zoom Out</button>
-                <button class="btn btn-zoom" onclick="resetZoom()">🔄 Reset</button>
-            </div>
+            <button class="btn btn-open" onclick="mulaSistem()">📹 Mula Kamera</button>
+            <button class="btn btn-zoom" onclick="zoomIn()">➕</button>
+            <button class="btn btn-zoom" onclick="zoomOut()">➖</button>
         </div>
 
         <div style="margin: 10px 0; text-align:center;">
-            <button class="btn btn-blue" onclick="setBG('blue')">Biru</button>
-            <button class="btn btn-white" onclick="setBG('white')">Putih</button>
+            <button class="btn btn-blue" onclick="selectedBG='blue'">Latar Biru</button>
+            <button class="btn btn-white" onclick="selectedBG='white'">Latar Putih</button>
         </div>
         <button id="btnSnap" class="btn btn-capture" onclick="ambilGambar()">AMBIL & SIMPAN</button>
     </div>
 
     <div class="dashboard-box" style="width: 450px;">
         <h3>📊 Status Murid</h3>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom:15px;">
-            <div style="background:#e8f5e9; padding:10px; border-radius:10px; text-align:center;">
-                <small>SIAP</small><br><b id="statSelesai" style="font-size:1.4em;">0</b>
-            </div>
-            <div style="background:#fdf2f2; padding:10px; border-radius:10px; text-align:center;">
-                <small>BELUM</small><br><b id="statBelum" style="font-size:1.4em;">0</b>
-            </div>
-        </div>
         <div id="listDashboard" style="height: 550px; overflow-y: auto;"></div>
     </div>
 </div>
 
 <script>
     const scriptURL = 'https://script.google.com/macros/s/AKfycbyTMq0RHNvcJqQla3pUyIgCp5ffRPvEedb6HV9lmmFEgjvC_513_7vdZssFXN0qPul7/exec';
-    let dataSekolah = {}, sudahSelesaiList = [], selectedBG = 'blue', currentStream = null, animationId = null;
-    
-    // Logik Zoom
-    let zoomLevel = 1.0;
-    const zoomStep = 0.1;
-
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const previewImg = document.getElementById('previewImg');
+    let net, video, canvas, ctx, currentStream, animationId;
+    let dataSekolah = {}, sudahSelesaiList = [], selectedBG = 'blue', zoomLevel = 1.0;
 
     window.onload = async () => {
         const res = await fetch(scriptURL);
@@ -103,36 +89,71 @@
         updateStats();
     };
 
+    async function mulaSistem() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+        // Muat model BodyPix dengan kualiti 'medium' untuk keseimbangan kelajuan
+        net = await bodyPix.load({
+            architecture: 'MobileNetV1',
+            outputStride: 16,
+            multiplier: 0.75,
+            quantBytes: 2
+        });
+        document.getElementById('loadingOverlay').style.display = 'none';
+        bukaKamera();
+    }
+
     async function bukaKamera() {
-        try {
-            if (currentStream) tutupKamera();
-            currentStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-            video.srcObject = currentStream;
-            video.onloadedmetadata = () => { 
-                video.play(); 
-                canvas.style.display = "block";
-                document.getElementById('labelLive').style.display = "block";
-                previewImg.style.display = "none";
-                document.getElementById('labelPreview').style.display = "none";
-                draw(); 
-            };
-        } catch (err) { alert("Akses kamera ditolak."); }
+        video = document.getElementById('video');
+        canvas = document.getElementById('canvas');
+        ctx = canvas.getContext('2d');
+        currentStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        video.srcObject = currentStream;
+        video.onloadedmetadata = () => { video.play(); prosesAI(); };
     }
 
-    function tutupKamera() {
-        if (currentStream) {
-            currentStream.getTracks().forEach(track => track.stop());
-            currentStream = null; video.srcObject = null;
-            if (animationId) cancelAnimationFrame(animationId);
+    async function prosesAI() {
+        if (!currentStream) return;
+        
+        // AI mengecam segmentasi tubuh murid
+        const segmentation = await net.segmentPerson(video, {
+            internalResolution: 'medium',
+            segmentationThreshold: 0.7
+        });
+
+        canvas.width = 300; canvas.height = 385;
+        
+        // Pengiraan Zoom
+        let w = video.videoWidth / zoomLevel;
+        let h = video.videoHeight / zoomLevel;
+        let x = (video.videoWidth - w) / 2;
+        let y = (video.videoHeight - h) / 2;
+
+        // Lukis frame asal ke canvas sementara
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
+        const tCtx = tempCanvas.getContext('2d');
+        tCtx.drawImage(video, x, y, w, h, 0, 0, canvas.width, canvas.height);
+
+        const frame = tCtx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Gantikan latar belakang berdasarkan data AI
+        for (let i = 0; i < segmentation.data.length; i++) {
+            if (segmentation.data[i] === 0) { // Jika kawasan latar belakang
+                const pixelIndex = i * 4;
+                if(selectedBG === 'blue') {
+                    frame.data[pixelIndex] = 0; frame.data[pixelIndex+1] = 0; frame.data[pixelIndex+2] = 255;
+                } else {
+                    frame.data[pixelIndex] = 255; frame.data[pixelIndex+1] = 255; frame.data[pixelIndex+2] = 255;
+                }
+            }
         }
-    }
+        ctx.putImageData(frame, 0, 0);
+        animationId = requestAnimationFrame(prosesAI);
+    Net}
 
-    // Fungsi Zoom
-    function zoomIn() { if(zoomLevel < 3.0) zoomLevel += zoomStep; }
-    function zoomOut() { if(zoomLevel > 1.0) zoomLevel -= zoomStep; }
-    function resetZoom() { zoomLevel = 1.0; }
+    function zoomIn() { if(zoomLevel < 2.5) zoomLevel += 0.1; }
+    function zoomOut() { if(zoomLevel > 1.0) zoomLevel -= 0.1; }
 
-    function setBG(c) { selectedBG = c; }
     function muatNama() { document.getElementById('searchNama').value = ""; tapisNama(); renderDashboard(); }
     function tapisNama() {
         const kataKunci = document.getElementById('searchNama').value.toLowerCase();
@@ -151,78 +172,33 @@
         renderDashboard();
     }
 
-    async function resetStatus(nama, kelas) {
-        if(!confirm(`Beri peluang ${nama} untuk ambil gambar semula?`)) return;
-        await fetch(`${scriptURL}?action=resetStatus&nama=${encodeURIComponent(nama)}&kelas=${encodeURIComponent(kelas)}`);
-        updateStats();
-    }
-
     function renderDashboard() {
         const kelas = document.getElementById('pilihKelas').value;
         const listDiv = document.getElementById('listDashboard');
         if(!kelas) return;
-        let html = ""; let selesai = 0;
+        let html = "";
         dataSekolah[kelas].forEach(nama => {
             const isDone = sudahSelesaiList.includes(nama + "|" + kelas);
-            if(isDone) selesai++;
             html += `<div class="status-item ${isDone?'item-done':'item-pending'}">
-                        <div>
-                            <div style="font-weight:bold; font-size:0.85em;">${nama}</div>
-                            <span class="status-tag ${isDone?'tag-done':'tag-pending'}">${isDone?'SIAP':'BELUM'}</span>
-                        </div>
-                        ${isDone ? `<button class="btn" style="background:#6c757d; font-size:0.7em;" onclick="resetStatus('${nama}','${kelas}')">🔄 Reset</button>` : ''}
+                        <div><b>${nama}</b><br><span class="status-tag ${isDone?'tag-done':'tag-pending'}">${isDone?'SIAP':'BELUM'}</span></div>
                      </div>`;
         });
-        document.getElementById('statSelesai').innerText = selesai;
-        document.getElementById('statBelum').innerText = dataSekolah[kelas].length - selesai;
         listDiv.innerHTML = html;
-    }
-
-    function draw() {
-        if (!currentStream || video.paused || video.ended) return;
-        canvas.width = 300; canvas.height = 385;
-
-        // Logik Zoom: Mengira kawasan tanaman (cropping) berdasarkan zoomLevel
-        let w = video.videoWidth / zoomLevel;
-        let h = video.videoHeight / zoomLevel;
-        let x = (video.videoWidth - w) / 2;
-        let y = (video.videoHeight - h) / 2;
-
-        ctx.drawImage(video, x, y, w, h, 0, 0, canvas.width, canvas.height); 
-
-        let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        for (let i = 0; i < frame.data.length; i += 4) {
-            let r = frame.data[i], g = frame.data[i+1], b = frame.data[i+2];
-            // Logik Latar Belakang (Disesuaikan untuk kain hijau studio)
-            if (g > 85 && g > r * 1.1 && g > b * 1.1) { 
-                if(selectedBG === 'blue') { frame.data[i]=0; frame.data[i+1]=0; frame.data[i+2]=255; }
-                else { frame.data[i]=255; frame.data[i+1]=255; frame.data[i+2]=255; }
-            }
-        }
-        ctx.putImageData(frame, 0, 0);
-        animationId = requestAnimationFrame(draw);
     }
 
     async function ambilGambar() {
         const nama = document.getElementById('pilihNama').value;
         const kelas = document.getElementById('pilihKelas').value;
-        const btn = document.getElementById('btnSnap');
-        if(!nama || !kelas) return alert("Pilih Nama & Kelas!");
+        if(!nama || !kelas) return alert("Pilih Murid!");
         
-        btn.innerText = "MENYIMPAN...";
-        btn.disabled = true;
         const imageData = canvas.toDataURL('image/jpeg', 0.9);
-        previewImg.src = imageData;
-        previewImg.style.display = "block";
-        document.getElementById('labelPreview').style.display = "block";
-        canvas.style.display = "none";
-        document.getElementById('labelLive').style.display = "none";
-
-        try {
-            await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ image: imageData, filename: `${nama}_${kelas}.jpg`, nama: nama, kelas: kelas }) });
-            updateStats();
-        } catch (e) { alert("Ralat muat naik."); } 
-        finally { btn.innerText = "AMBIL & SIMPAN"; btn.disabled = false; }
+        document.getElementById('previewImg').src = imageData;
+        document.getElementById('previewImg').style.display = "block";
+        document.getElementById('canvas').style.display = "none";
+        
+        await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ image: imageData, filename: `${nama}_${kelas}.jpg`, nama: nama, kelas: kelas }) });
+        updateStats();
+        alert("Gambar AI Disimpan!");
     }
 </script>
 </body>
