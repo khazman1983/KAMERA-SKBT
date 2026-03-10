@@ -2,17 +2,20 @@
 <html lang="ms">
 <head>
     <meta charset="UTF-8">
-    <title>Sistem Kamera Studio SKBT - Versi Klasik</title>
+    <title>Sistem Kamera Studio SKBT - Versi Klasik (Optimized)</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
         .main-container { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
         .camera-box, .dashboard-box { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         
-        /* Paparan Video & Preview */
-        #video, #previewImg { border: 4px solid #333; border-radius: 10px; background: #000; width: 300px; height: 385px; display: block; margin: 0 auto; object-fit: cover; }
+        /* object-fit: cover memastikan paparan live tidak herot/kurus */
+        #video, #previewImg { 
+            border: 4px solid #333; border-radius: 10px; background: #000; 
+            width: 300px; height: 385px; display: block; margin: 0 auto; 
+            object-fit: cover; 
+        }
         #previewImg { background: #eee; display: none; }
         
-        /* Butang */
         .btn { padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; margin: 3px; transition: 0.3s; font-size: 0.85em; }
         .btn-capture { background: #28a745; width: 100%; font-size: 1.1em; margin-top: 15px; }
         .btn-open { background: #20c997; }
@@ -20,7 +23,6 @@
         .btn-zoom { background: #6f42c1; }
         .btn-reset-status { background: #6c757d; font-size: 0.7em; padding: 5px 10px; }
         
-        /* Dashboard */
         .status-item { margin-bottom: 10px; padding: 12px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid transparent; background: #f9f9f9; }
         .item-done { border-left-color: #28a745; background: #e8f5e9; }
         .item-pending { border-left-color: #dc3545; background: #fdf2f2; }
@@ -30,7 +32,6 @@
         
         .search-box { width: 94%; padding: 10px; margin-top: 5px; border: 2px solid #0055ff; border-radius: 8px; }
         select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd; }
-        
         .label-status { text-align: center; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; }
     </style>
 </head>
@@ -52,7 +53,6 @@
         <div style="margin-top:15px;">
             <div id="labelLive" class="label-status" style="color: red; display:none;">🔴 LIVE KAMERA</div>
             <video id="video" autoplay playsinline></video>
-            
             <div id="labelPreview" class="label-status" style="color: #0055ff; display:none;">✅ GAMBAR DIRAKAM</div>
             <img id="previewImg">
         </div>
@@ -87,7 +87,6 @@
     let currentStream = null;
     let dataSekolah = {}, sudahSelesaiList = [], zoomLevel = 1.0;
 
-    // 1. Muat data awal
     window.onload = async () => {
         try {
             const res = await fetch(scriptURL);
@@ -98,7 +97,6 @@
         } catch (e) { console.error("Gagal muat data."); }
     };
 
-    // 2. Fungsi Kamera Biasa
     async function bukaKamera() {
         try {
             if (currentStream) tutupKamera();
@@ -110,7 +108,8 @@
             previewImg.style.display = "none";
             document.getElementById('labelLive').style.display = "block";
             document.getElementById('labelPreview').style.display = "none";
-            larasZoom(0); // Reset paparan zoom
+            zoomLevel = 1.0;
+            larasZoom(0);
         } catch (err) { alert("Sila benarkan akses kamera."); }
     }
 
@@ -127,7 +126,6 @@
         video.style.transform = `scale(${zoomLevel})`;
     }
 
-    // 3. Ambil Gambar
     async function ambilGambar() {
         const nama = document.getElementById('pilihNama').value;
         const kelas = document.getElementById('pilihKelas').value;
@@ -140,17 +138,28 @@
         const canvas = document.getElementById('hiddenCanvas');
         const ctx = canvas.getContext('2d');
         
-        // Set saiz simpanan (Portrait)
+        // Saiz simpanan Portrait (600x770)
         canvas.width = 600;
         canvas.height = 770;
 
-        // Ambil frame video dengan mengambil kira Zoom
-        let sw = video.videoWidth / zoomLevel;
-        let sh = video.videoHeight / zoomLevel;
-        let sx = (video.videoWidth - sw) / 2;
-        let sy = (video.videoHeight - sh) / 2;
+        // Logik CROP TENGAH (MENGELAKKAN MUKA KURUS)
+        let vWidth = video.videoWidth;
+        let vHeight = video.videoHeight;
+        let targetRatio = canvas.width / canvas.height;
+        
+        let sHeight = vHeight / zoomLevel;
+        let sWidth = sHeight * targetRatio;
+        
+        // Pastikan sWidth tidak melebihi lebar video asal
+        if (sWidth > vWidth / zoomLevel) {
+            sWidth = vWidth / zoomLevel;
+            sHeight = sWidth / targetRatio;
+        }
 
-        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        let sx = (vWidth - sWidth * zoomLevel) / 2;
+        let sy = (vHeight - sHeight * zoomLevel) / 2;
+
+        ctx.drawImage(video, sx, sy, sWidth * zoomLevel, sHeight * zoomLevel, 0, 0, canvas.width, canvas.height);
         
         const imageData = canvas.toDataURL('image/jpeg', 0.9);
         previewImg.src = imageData;
@@ -170,7 +179,9 @@
                     kelas: kelas 
                 }) 
             });
-            await updateStats();
+            // Update senarai lokal terus
+            if(!sudahSelesaiList.includes(nama + "|" + kelas)) sudahSelesaiList.push(nama + "|" + kelas);
+            renderDashboard();
         } catch (e) { alert("Ralat simpan."); }
         finally {
             btn.innerText = "AMBIL & SIMPAN";
@@ -178,11 +189,12 @@
         }
     }
 
-    // 4. Dashboard & Reset
     async function updateStats() {
-        const res = await fetch(scriptURL + "?action=getStats");
-        sudahSelesaiList = await res.json();
-        renderDashboard();
+        try {
+            const res = await fetch(scriptURL + "?action=getStats");
+            sudahSelesaiList = await res.json();
+            renderDashboard();
+        } catch (e) { console.log("Gagal kemaskini status."); }
     }
 
     function renderDashboard() {
@@ -207,8 +219,16 @@
 
     async function resetStatus(nama, kelas) {
         if(!confirm(`Padam rekod ${nama} untuk ambil semula?`)) return;
-        await fetch(`${scriptURL}?action=resetStatus&nama=${encodeURIComponent(nama)}&kelas=${encodeURIComponent(kelas)}`);
-        await updateStats();
+        
+        // Update UI secara lokal (Terus jadi MERAH)
+        sudahSelesaiList = sudahSelesaiList.filter(item => item !== (nama + "|" + kelas));
+        renderDashboard();
+
+        try {
+            await fetch(`${scriptURL}?action=resetStatus&nama=${encodeURIComponent(nama)}&kelas=${encodeURIComponent(kelas)}`);
+        } catch (e) { 
+            alert("Ralat server, tetapi paparan telah dikemaskini."); 
+        }
     }
 
     function muatNama() { document.getElementById('searchNama').value = ""; tapisNama(); renderDashboard(); }
